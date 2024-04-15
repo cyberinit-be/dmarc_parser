@@ -43,17 +43,30 @@ def parse_xml(xml_file):
         dkim_auths = auth_results.findall('.//dkim')
         spf_auths = auth_results.findall('.//spf')
 
+        dkim_result = None
         if dkim_auths:
             dkim_auth = dkim_auths[0]
             row['dkim_domain'] = find_text(dkim_auth, './/domain')
             row['dkim_selector'] = find_text(dkim_auth, './/selector')
-            row['dkim_result'] = find_text(dkim_auth, './/result')
+            dkim_result = find_text(dkim_auth, './/result')
+        else:
+            row['dkim_domain'] = ''
+            row['dkim_selector'] = ''
+
+        if dkim_result is None:
+            dkim_result = row['dkim']
+
+        row['dkim_result'] = dkim_result
 
         if spf_auths:
             spf_auth = spf_auths[0]
             row['spf_domain'] = find_text(spf_auth, './/domain')
             row['spf_scope'] = find_text(spf_auth, './/scope', default='')
             row['spf_result'] = find_text(spf_auth, './/result')
+        else:
+            row['spf_domain'] = ''
+            row['spf_scope'] = ''
+            row['spf_result'] = row['spf']
 
         row['filename'] = filename
         data.append(row)
