@@ -7,6 +7,7 @@ import os
 import datetime
 import jinja2
 import matplotlib.pyplot as plt
+import matplotlib.text as mtext
 import io
 import base64
 
@@ -102,21 +103,25 @@ def write_to_csv(data, csv_file):
 
 
 
-def generate_pie_chart(results, title):
-    labels = ['Pass', 'Fail', 'Softfail']
-    sizes = [results['pass'], results['fail'], results['softfail']]
-    colors = ['#5cb85c', '#d9534f', '#f0ad4e']
+def generate_pie_chart(results, title, result_type):
+    labels = ['Pass', 'Fail', 'Softfail', 'None']
+    sizes = [results['pass'], results['fail'], results['softfail'], results['none']]
+    colors = ['#5cb85c', '#d9534f', '#f0ad4e', '#5bc0de']
 
     fig, ax = plt.subplots()
     ax.pie(sizes, labels=labels, colors=colors, autopct='%1.1f%%')
     ax.axis('equal')
     ax.set_title(title)
 
+    fail_text = f'Failed: {results["fail"]}\nSoftfailed: {results["softfail"]}'
+    ax.text(0.6, 0.6, fail_text, transform=ax.transAxes, fontsize=14, bbox=dict(facecolor='white', alpha=0.5))
+
     buf = io.BytesIO()
     plt.savefig(buf, format='png')
     plt.close(fig)
     buf.seek(0)
     return buf
+
 
 def main():
     if len(sys.argv) < 3:
@@ -129,17 +134,6 @@ def main():
     data = []
     dkim_results = {'pass': 0, 'fail': 0, 'softfail': 0, 'none': 0}
     spf_results = {'pass': 0, 'fail': 0, 'softfail': 0, 'none': 0}
-
-    for xml_file in xml_files:
-        file_data = parse_xml(xml_file)
-        data.extend(file_data)
-
-        for row in file_data:
-            dkim_result = row.get('dkim_result', 'none')
-            dkim_results[dkim_result] += int(row['count'])
-
-            spf_result = row.get('spf_result', 'none')
-            spf_results[spf_result] += int(row['count'])
 
 
     template_string = '''
@@ -222,15 +216,38 @@ def main():
 </html>
 '''
 
-    existing_data = read_csv(csv_file)
-    data = existing_data + data
 
+    # Read existing data from CSV file
+    existing_data = read_csv(csv_file)
+
+    for xml_file in xml_files:
+        file_data = parse_xml(xml_file)
+        data.extend(file_data)
+
+        for row in file_data:
+            dkim_result = row.get('dkim_result', 'none')
+            dkim_results[dkim_result] += int(row['count'])
+
+            spf_result = row.get('spf_result', 'none')
+            spf_results[spf_result] += int(row['count'])
+
+    # Update data list with existing data from CSV file
+    data.extend(existing_data)
+
+    # Update dkim_results and spf_results with data from CSV file
+    for row in existing_data:
+        dkim_result = row.get('dkim_result', 'none')
+        dkim_results[dkim_result] += int(row['count'])
+
+        spf_result = row.get('spf_result', 'none')
+        spf_results[spf_result] += int(row['count'])
+
+    # Write data to CSV file
     write_to_csv(data, csv_file)
 
-  
     # Generate pie charts as in-memory images
-    dkim_chart = generate_pie_chart(dkim_results, 'DKIM Results')
-    spf_chart = generate_pie_chart(spf_results, 'SPF Results')
+    dkim_chart = generate_pie_chart(dkim_results, 'DKIM Results', 'dkim')
+    spf_chart = generate_pie_chart(spf_results, 'SPF Results', 'spf')
 
     # Encode the in-memory images as base64 strings
     dkim_chart_base64 = base64.b64encode(dkim_chart.read()).decode('utf-8')
